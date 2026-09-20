@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: 2026 Kdenlive contributors
+# SPDX-License-Identifier: BSD-2-Clause
+
+name: Build and release
+
+on:
+  push:
+    branches: [master, 'codex/**']
+    tags: ['mcp-v*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  mcp-tests:
+    name: MCP transport tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y ninja-build qt6-base-dev
+      - name: Build and test the HTTP transport
+        run: |
+          cmake -S tests/mcp -B build-mcp -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-mcp --parallel 2
+          ctest --test-dir build-mcp --output-on-failure
+
+  windows:
+    name: Windows x64 packages
+    needs: mcp-tests
+    runs-on: windows-2022
+    timeout-minutes: 240
+    env:
+      KDENLIVE_CRAFT_ROOT: C:\CraftRoot
+      CRAFT_REVISION: 64de6f938a2244df7201e1a2731eb50c3d31d4a2
+      BLUEPRINTS_REVISION: 948839b310fc155e912ca8bdaa5ebab9c9930fdd
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Set up KDE Craft
+        run: ./.github/scripts/build-windows.ps1 -Stage Setup
+      - name: Install dependencies from KDE Craft
+        run: ./.github/scripts/build-windows.ps1 -Stage Dependencies
+      - name: Build this checkout and test MCP on Windows
+        run: ./.github/scripts/build-windows.ps1 -Stage Build
+      - name: Package and smoke-test the portable application
+        run: ./.github/scripts/build-windows.ps1 -Stage Package
+      - name: Upload installer and portable archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kdenlive-mcp-windows-x64
+          path: build-release/packages/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-build-diagnostics
+          path: |
+            C:/CraftRoot/etc/log/**
+            build-mcp-windows/Testing/Temporary/**
+            build-release/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    name: Publish tagged release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/mcp-v')
+    needs: [mcp-tests, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: kdenlive-mcp-windows-x64
+          path: packages
+      - name: Verify artifacts and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          (cd packages && sha256sum --check SHA256SUMS)
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo 'This release already exists; refusing to replace its assets.' >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" packages/* \
+            --verify-tag --generate-notes \
+            --title "Kdenlive MCP $RELEASE_TAG"
