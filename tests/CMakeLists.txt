@@ -21,6 +21,7 @@ set(KdenliveTest_SOURCES
     hidetest.cpp
     keyframetest.cpp
     markertest.cpp
+    mcptest.cpp
     mixtest.cpp
     modeltest.cpp
     movetest.cpp
@@ -42,6 +43,7 @@ set(KdenliveTest_SOURCES
 )
 
 include(ECMAddTests)
+add_subdirectory(mcp)
 
 # Shared test library
 add_library(kdenliveTestSupport OBJECT TestMain.cpp test_utils.cpp abortutil.cpp)

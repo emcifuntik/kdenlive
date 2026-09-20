@@ -51,6 +51,7 @@ SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QFile>
 #include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -359,6 +360,10 @@ int main(int argc, char *argv[])
     QCommandLineOption disableWelcome(QStringLiteral("no-welcome"), i18n("Do not show any welcome screen."));
     parser.addOption(disableWelcome);
 
+    QCommandLineOption mcpPortOption(QStringLiteral("mcp-port"), i18n("Port for the automatically started MCP HTTP server on localhost (0 chooses a free port)."),
+                                    QStringLiteral("port"), QStringLiteral("9250"));
+    parser.addOption(mcpPortOption);
+
     QCommandLineOption debugOption(QStringLiteral("debug"), i18n("Show some development specific features in the UI, disable all exclude lists for assets."));
     parser.addOption(debugOption);
 
@@ -374,6 +379,12 @@ int main(int argc, char *argv[])
     // Parse command line
     parser.process(app);
     aboutData.processCommandLine(&parser);
+    bool mcpPortOk = false;
+    const uint mcpPort = parser.value(mcpPortOption).toUInt(&mcpPortOk);
+    if (!mcpPortOk || mcpPort > 65535 || (parser.isSet(mcpPortOption) && (parser.isSet(renderOption) || parser.isSet(verifyOption)))) {
+        qCritical() << "MCP requires a GUI session and a port in the range 0..65535";
+        return EXIT_FAILURE;
+    }
     if (parser.isSet(saveDebugOption)) {
         QJsonObject report, property;
         QJsonArray properties;
@@ -606,6 +617,14 @@ int main(int argc, char *argv[])
         result = EXIT_CLEAN_RESTART;
     } else {
         pCore->initGUI(parser.value(mltPathOption), app.url, clipsToLoad);
+        if (!pCore->startMcpServer(quint16(mcpPort))) {
+            // An additional editor instance must not require a custom port.
+            if (parser.isSet(mcpPortOption) || !pCore->startMcpServer(0)) {
+                qCritical() << "The MCP endpoint could not be started";
+                Core::clean();
+                return EXIT_FAILURE;
+            }
+        }
         result = app.exec();
     }
     Core::clean();

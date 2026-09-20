@@ -146,6 +146,10 @@ struct TimelineFunctions
                            bool overwrite, bool useTargets = true);
     static bool insertZone(const std::shared_ptr<TimelineItemModel> &timeline, QList<int> trackIds, const QString &binId, int insertFrame, QPoint zone,
                            bool overwrite, bool useTargets, Fun &undo, Fun &redo);
+    /** Insert a source zone on explicit tracks without consulting UI targets or opening dialogs.
+     * Audio tracks receive active streams in supplied order; at most one video track is allowed. */
+    static bool insertZoneOnTracks(const std::shared_ptr<TimelineItemModel> &timeline, const QList<int> &trackIds, const QString &binId,
+                                   int position, QPoint sourceZone, bool overwrite);
 
     static bool requestItemCopy(const std::shared_ptr<TimelineItemModel> &timeline, int clipId, int trackId, int position);
     static void showClipKeyframes(const std::shared_ptr<TimelineItemModel> &timeline, int clipId, bool value);

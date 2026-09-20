@@ -19,6 +19,7 @@ public:
     ~RenderServer() override;
 
 Q_SIGNALS:
+    void renderingStarted(const QString &url);
     void setRenderingProgress(const QString &url, int progress, int frame);
     void setRenderingFinished(const QString &url, int status, const QString &error);
 

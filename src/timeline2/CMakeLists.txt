@@ -12,6 +12,8 @@ set(kdenlive_SRCS
   timeline2/model/timelinefunctions.cpp
   timeline2/model/timelineitemmodel.cpp
   timeline2/model/timelinemodel.cpp
+  timeline2/model/timeremapfunctions.cpp
+  timeline2/model/zoneinsert.cpp
   timeline2/model/trackmodel.cpp
   timeline2/view/dialogs/clipdurationdialog.cpp
   timeline2/view/dialogs/spacerdialog.cpp

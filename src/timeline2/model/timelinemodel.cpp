@@ -7001,6 +7001,15 @@ std::shared_ptr<EffectStackModel> TimelineModel::getClipMixStackModel(int clipId
     return std::static_pointer_cast<EffectStackModel>(m_allClips.at(clipId)->m_effectStack);
 }
 
+std::shared_ptr<AssetParameterModel> TimelineModel::getMixParameterModel(int clipId) const
+{
+    READ_LOCK();
+    if (!isClip(clipId) || getClipTrackId(clipId) < 0 || getMixDuration(clipId) <= 0) {
+        return nullptr;
+    }
+    return getTrackById_const(getClipTrackId(clipId))->mixModel(clipId);
+}
+
 std::shared_ptr<EffectStackModel> TimelineModel::getTrackEffectStackModel(int trackId)
 {
     READ_LOCK();

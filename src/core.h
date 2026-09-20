@@ -37,6 +37,8 @@ class LibraryWidget;
 class MainWindow;
 class MediaCapture;
 class MediaBrowser;
+class McpServer;
+class McpTools;
 class MixerManager;
 class Monitor;
 class MonitorManager;
@@ -114,6 +116,9 @@ public:
      * @param clipsToLoad
      */
     void initGUI(const QString &MltPath, const QUrl &Url, const QStringList &clipsToLoad = {});
+
+    /** @brief Start the MCP HTTP endpoint on IPv4 loopback without authentication. */
+    bool startMcpServer(quint16 port);
 
     /** @brief Returns a pointer to the singleton object. */
     static std::unique_ptr<Core> &self();
@@ -397,6 +402,8 @@ private:
 
     MainWindow *m_mainWindow{nullptr};
     ProjectManager *m_projectManager{nullptr};
+    std::unique_ptr<McpTools> m_mcpTools;
+    std::unique_ptr<McpServer> m_mcpServer;
     MonitorManager *m_monitorManager{nullptr};
     std::shared_ptr<ProjectItemModel> m_projectItemModel;
     LibraryWidget *m_library{nullptr};

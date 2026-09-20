@@ -299,6 +299,8 @@ public:
     std::shared_ptr<EffectStackModel> getClipEffectStackModel(int clipId) const;
     /** @brief Given a clip Id, returns its mix transition stack model */
     std::shared_ptr<EffectStackModel> getClipMixStackModel(int clipId) const;
+    /** Parameters of a clip's incoming same-track mix, or nullptr if it has none. */
+    std::shared_ptr<AssetParameterModel> getMixParameterModel(int clipId) const;
 
     /** @brief Returns the position of clip (-1 if it is not inserted)
        @param clipId Id of the clip to test
@@ -904,6 +906,11 @@ public:
     bool requestClipTimeWarp(int clipId, double speed, bool pitchCompensate, bool changeDuration, Fun &undo, Fun &redo);
     bool requestClipTimeRemap(int clipId, bool enable = true);
     bool requestClipTimeRemap(int clipId, bool enable, Fun &undo, Fun &redo);
+    /** Read native time-remap parameters, or an empty map when disabled. */
+    QMap<QString, QString> getClipTimeRemapValues(int clipId) const;
+    /** Set an undoable time map on a clip and its AV partner. Output keys are relative
+     * to the clip start; values are absolute source frames. Duration is preserved. */
+    bool requestClipTimeRemapKeyframes(int clipId, const QMap<int, int> &keyframes, bool pitchCompensate, bool frameBlend);
     std::shared_ptr<Mlt::Producer> getClipProducer(int clipId);
 
     void replugClip(int clipId);

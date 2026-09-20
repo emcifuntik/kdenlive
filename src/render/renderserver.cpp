@@ -61,6 +61,7 @@ void RenderServer::handleJson(const QJsonObject &json, QLocalSocket *socket)
 {
     if (json.contains("url")) {
         m_jobSocket[json.value("url").toString()] = socket;
+        Q_EMIT renderingStarted(json.value("url").toString());
     }
     if (json.contains("setRenderingProgress")) {
         const QJsonObject obj = json.value("setRenderingProgress").toObject();

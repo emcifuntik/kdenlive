@@ -27,6 +27,8 @@ SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 #include "kdenlivesettings.h"
 #include "library/librarywidget.h"
 #include "mainwindow.h"
+#include "mcp/mcpserver.h"
+#include "mcp/mcptools.h"
 #include "mltconnection.h"
 #include "mltcontroller/clipcontroller.h"
 #include "monitor/monitormanager.h"
@@ -35,6 +37,7 @@ SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 #include "project/dialogs/guideslist.h"
 #include "project/projectmanager.h"
 #include "qmltypes/thumbnailprovider.h"
+#include "render/renderserver.h"
 #include "timeline2/model/timelineitemmodel.hpp"
 #include "timeline2/view/timelinecontroller.h"
 #include "timeline2/view/timelinewidget.h"
@@ -92,6 +95,11 @@ void Core::updateHideBarsTimer(bool inhibit)
 
 void Core::prepareShutdown()
 {
+    if (m_mcpServer) {
+        m_mcpServer->stop();
+    }
+    m_mcpServer.reset();
+    m_mcpTools.reset();
     m_guiConstructed = false;
     // m_mainWindow->getCurrentTimeline()->controller()->prepareClose();
     projectItemModel()->blockSignals(true);
@@ -110,6 +118,23 @@ void Core::finishShutdown()
 }
 
 Core::~Core() {}
+
+bool Core::startMcpServer(quint16 port)
+{
+    if (m_mcpServer || !m_mainWindow) {
+        return false;
+    }
+    auto editor = std::make_unique<McpTools>(m_mainWindow->findChild<RenderServer *>());
+    auto server = std::make_unique<McpServer>(editor->registry());
+    if (!server->start(port)) {
+        qWarning() << "Could not start MCP HTTP server:" << server->errorString();
+        return false;
+    }
+    qInfo().noquote() << QStringLiteral("MCP HTTP endpoint: http://127.0.0.1:%1/mcp").arg(server->port());
+    m_mcpTools = std::move(editor);
+    m_mcpServer = std::move(server);
+    return true;
+}
 
 bool Core::build(LinuxPackageType packageType, bool testMode, bool debugMode, bool showWelcome)
 {

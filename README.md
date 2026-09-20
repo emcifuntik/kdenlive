@@ -32,6 +32,9 @@ Kdenlive is written in C++ and is using these technologies and frameworks:
 
 ### Getting Started
 
+For LLM-assisted editing through the embedded HTTP server, see the
+[MCP setup, tool coverage and client example](dev-docs/mcp.md).
+
 1. Check out our [build instructions](dev-docs/build.md) to set up your development environment
 2. Familiarize yourself with the [architecture](dev-docs/architecture.md) and [coding guidelines](dev-docs/coding.md)
 4. If the MLT library is new to you check out [MLT Introduction](dev-docs/mlt-intro.md)
