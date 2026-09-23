@@ -63,5 +63,12 @@ first failed workflow step. Dependency/version failures usually require updating
 the pinned Craft/blueprint revisions; packaging failures must be fixed before a
 release can be published.
 
+Each Craft stage also writes `build-release/<stage>.log`; failed commands include
+their last output lines in the job annotations, including bootstrap failures.
+The build script removes external MinGW/MSYS/Cygwin/Strawberry directories from
+its process `PATH` before every stage. This prevents a runner-provided native
+`make.exe` from shadowing Craft's MSYS make, which understands `/c/...` paths.
+The runner's machine-wide environment is not modified.
+
 Upstream references: [KDE Craft setup](https://develop.kde.org/docs/getting-started/building/craft/)
 and [Kdenlive's Craft blueprint](https://github.com/KDE/craft-blueprints-kde/blob/master/kde/kdemultimedia/kdenlive/kdenlive.py).

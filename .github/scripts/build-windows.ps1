@@ -12,10 +12,41 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $craftRoot = $env:KDENLIVE_CRAFT_ROOT
 if (-not $craftRoot) { throw 'KDENLIVE_CRAFT_ROOT must point to a dedicated Craft installation.' }
 
+function Get-CraftPath {
+    param([string]$SearchPath, [string]$Root)
+    $prefix = $Root.Replace('/', '\').TrimEnd('\') + '\'
+    ($SearchPath -split ';' | Where-Object {
+        $entry = $_.Trim().Trim('"').Replace('/', '\').TrimEnd('\') + '\'
+        # Hosted runners expose MinGW's native make, which cannot read MSYS /c/... paths.
+        # Keep Craft's own MSYS installation; its shell adds the correct tools as needed.
+        $entry.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or
+            $entry -notmatch '(?i)\\(mingw\d*|msys\d*|cygwin\d*|strawberry)\\'
+    }) -join ';'
+}
+
+# Apply before bootstrap as well as in each subsequent, fresh Actions step.
+$env:PATH = Get-CraftPath $env:PATH $craftRoot
+$logDir = Join-Path $repoRoot 'build-release'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+$stageLog = Join-Path $logDir "$($Stage.ToLowerInvariant()).log"
+
 function Invoke-Checked {
     param([string]$Command, [string[]]$Arguments)
-    & $Command @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "$Command failed with exit code $LASTEXITCODE" }
+    $tail = [Collections.Generic.Queue[string]]::new()
+    & $Command @Arguments 2>&1 | Tee-Object -FilePath $stageLog -Append | ForEach-Object {
+        Write-Host $_
+        $tail.Enqueue([string]$_)
+        if ($tail.Count -gt 30) { $null = $tail.Dequeue() }
+    }
+    if ($LASTEXITCODE -ne 0) {
+        $exitCode = $LASTEXITCODE
+        # Preserve the actual dependency error in the check annotations, even if bootstrap fails.
+        $detail = ($tail.ToArray() -join "`n") -replace '\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))', ''
+        if ($detail.Length -gt 6000) { $detail = $detail.Substring($detail.Length - 6000) }
+        $detail = $detail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+        Write-Host "::error title=Craft $Stage failed::$detail"
+        throw "$Command failed with exit code $exitCode; see $stageLog"
+    }
 }
 
 if ($Stage -eq 'Setup') {

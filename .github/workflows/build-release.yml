@@ -63,7 +63,7 @@ jobs:
       - name: Package and smoke-test the portable application
         run: ./.github/scripts/build-windows.ps1 -Stage Package
       - name: Upload installer and portable archive
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: kdenlive-mcp-windows-x64
           path: build-release/packages/*
@@ -72,11 +72,11 @@ jobs:
           retention-days: 14
       - name: Upload build diagnostics
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: windows-build-diagnostics
           path: |
-            C:/CraftRoot/etc/log/**
+            C:/CraftRoot/logs/**
             build-mcp-windows/Testing/Temporary/**
             build-release/*.log
           if-no-files-found: ignore
