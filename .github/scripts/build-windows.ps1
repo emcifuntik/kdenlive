@@ -100,10 +100,18 @@ if ($Stage -eq 'Setup') {
     return
 }
 
-# Craft sets up MSVC, Qt, MLT and KDE paths, and changes the current directory.
-. (Join-Path $craftRoot 'craft/craftenv.ps1')
+# Do not dot-source craft/craftenv.ps1: it starts with `cls`, which throws "The handle is invalid" without a
+# console and aborts this script under $ErrorActionPreference = 'Stop'. craft.py sets up the MSVC, Qt and
+# Craft environment for everything it runs (including `craft --run`), so call it directly.
+function craft {
+    $python = Join-Path $craftRoot 'dev-utils/bin/python3.exe'
+    if (-not (Test-Path -LiteralPath $python)) { $python = (Get-Command python).Source }
+    & $python (Join-Path $craftRoot 'craft/bin/craft.py') @args
+}
 Set-Location -LiteralPath $repoRoot
-$common = @('--ci-mode', '--options', '[CodeSigning]Enabled=False', '--options', '[Compile]Jobs=4')
+# Hosted runners have 4 cores; CRAFT_JOBS lets a local run of this script use a bigger machine.
+$jobs = if ($env:CRAFT_JOBS) { $env:CRAFT_JOBS } else { '4' }
+$common = @('--ci-mode', '--options', '[CodeSigning]Enabled=False', '--options', "[Compile]Jobs=$jobs")
 # KDE's msvc2022 binary cache (CacheVersion 26.05) carries KDE Gear only up to 26.04.x for these runtime
 # dependencies of Kdenlive; pin them to the cached release instead of building 26.08 from source.
 $common += @('--options', 'kde/kdenetwork/kio-extras.version=26.04.2', '--options', 'kde/applications/libkexiv2.version=26.04.2')
