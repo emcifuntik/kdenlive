@@ -68,7 +68,15 @@ their last output lines in the job annotations, including bootstrap failures.
 The build script removes external MinGW/MSYS/Cygwin/Strawberry directories from
 its process `PATH` before every stage. This prevents a runner-provided native
 `make.exe` from shadowing Craft's MSYS make, which understands `/c/...` paths.
+It also removes the Android SDK/NDK variables (`ANDROID_SDK_ROOT`, `ANDROID_NDK`, …)
+that GitHub's Windows images export: Craft's bootstrap would otherwise treat the
+host as Android, select `BuildType=MinSizeRel` (no Windows binary cache exists for
+it) and try to build its whole toolchain from source, failing in `libs/gettext`.
+The Setup stage fails early if the resulting build type is not cacheable.
 The runner's machine-wide environment is not modified.
+
+Binary-cache decisions are published as a `Craft binary cache` check-run
+annotation, which is readable without signing in (job logs are not).
 
 Upstream references: [KDE Craft setup](https://develop.kde.org/docs/getting-started/building/craft/)
 and [Kdenlive's Craft blueprint](https://github.com/KDE/craft-blueprints-kde/blob/master/kde/kdemultimedia/kdenlive/kdenlive.py).

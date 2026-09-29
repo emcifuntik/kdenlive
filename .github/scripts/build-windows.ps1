@@ -26,6 +26,12 @@ function Get-CraftPath {
 
 # Apply before bootstrap as well as in each subsequent, fresh Actions step.
 $env:PATH = Get-CraftPath $env:PATH $craftRoot
+# GitHub's Windows images export the Android SDK/NDK. CraftBootstrap treats any host with ANDROID_SDK_ROOT and
+# ANDROID_NDK as Android and selects BuildType=MinSizeRel, for which KDE publishes no Windows binary cache:
+# Craft then builds its whole toolchain from source and fails on gettext.
+foreach ($name in 'ANDROID_SDK_ROOT', 'ANDROID_NDK', 'ANDROID_NDK_HOME', 'ANDROID_NDK_ROOT', 'ANDROID_NDK_LATEST_HOME', 'ANDROID_HOME') {
+    Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+}
 $logDir = Join-Path $repoRoot 'build-release'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $stageLog = Join-Path $logDir "$($Stage.ToLowerInvariant()).log"
@@ -75,8 +81,12 @@ if ($Stage -eq 'Setup') {
     Invoke-Checked git @('config', '--global', 'core.longpaths', 'true')
     $bootstrap = Join-Path $env:RUNNER_TEMP 'CraftBootstrap.py'
     Invoke-WebRequest "https://raw.githubusercontent.com/KDE/craft/$env:CRAFT_REVISION/setup/CraftBootstrap.py" -OutFile $bootstrap
-    Invoke-Checked python @($bootstrap, '--prefix', $craftRoot, '--branch', $env:CRAFT_REVISION, '--use-defaults', '--verbose')
+    Invoke-Checked python @($bootstrap, '--prefix', $craftRoot, '--branch', $env:CRAFT_REVISION, '--use-defaults')
     Write-CacheDiagnostics -Level notice
+    # The binary cache only exists for Release/RelWithDebInfo; any other build type rebuilds everything.
+    $buildType = Select-String -LiteralPath (Join-Path $craftRoot 'etc/CraftSettings.ini') -Pattern '^\s*BuildType\s*=\s*(\S+)' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
+    if ($buildType -notin @('RelWithDebInfo', 'Release')) { throw "Unexpected Craft BuildType '$buildType'" }
 
     # Bootstrap installs Craft and its blueprint repository. Pin both before building.
     $repositories = @{
@@ -93,7 +103,7 @@ if ($Stage -eq 'Setup') {
 # Craft sets up MSVC, Qt, MLT and KDE paths, and changes the current directory.
 . (Join-Path $craftRoot 'craft/craftenv.ps1')
 Set-Location -LiteralPath $repoRoot
-$common = @('--ci-mode', '--options', '[CodeSigning]Enabled=False', '--options', '[Compile]Jobs=2')
+$common = @('--ci-mode', '--options', '[CodeSigning]Enabled=False', '--options', '[Compile]Jobs=4')
 $application = @('--options', 'kdenlive.version=master', '--options', "kdenlive.srcDir=$repoRoot",
     '--options', 'kdenlive.buildTests=False', '--options', 'kdenlive.packageAppx=False')
 

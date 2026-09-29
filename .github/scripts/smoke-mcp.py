@@ -35,7 +35,9 @@ def main():
     for key in list(environment):
         if key.startswith(("QT_", "QML", "MLT_", "KDE", "CRAFT", "XDG_")):
             environment.pop(key)
-    environment.update(QT_QPA_PLATFORM="offscreen", QT_FORCE_STDERR_LOGGING="1")
+    # CI runners have no audio device: the monitor's sdl2_audio consumer would fail and Kdenlive would block
+    # on a modal "Could not create the video preview window" error before starting the MCP server.
+    environment.update(QT_QPA_PLATFORM="offscreen", QT_FORCE_STDERR_LOGGING="1", SDL_AUDIODRIVER="dummy")
 
     with tempfile.TemporaryDirectory(prefix="kdenlive-mcp-smoke-") as profile:
         # First-run configuration and caches must not affect the runner's profile.
