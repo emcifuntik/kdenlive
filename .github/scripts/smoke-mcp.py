@@ -4,9 +4,11 @@
 """Start the packaged editor and verify its automatically enabled MCP endpoint."""
 
 import argparse
+import contextlib
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,6 +16,40 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "dev-docs" / "examples"))
 from mcp_client import McpClient  # noqa: E402
+
+
+@contextlib.contextmanager
+def preserved_windows_profile():
+    """On Windows QStandardPaths resolves AppData through the Known Folder API and ignores the APPDATA and
+    LOCALAPPDATA variables, so the editor writes into the real user profile. Restore it afterwards so a
+    local run of this script cannot change the settings of an installed Kdenlive."""
+    if os.name != "nt":
+        yield
+        return
+    local, roaming = Path(os.environ["LOCALAPPDATA"]), Path(os.environ["APPDATA"])
+    items = [local / "kdenliverc", local / "kdenlive-layoutsrc", local / "kdenlivenotifyrc", roaming / "kdenlive"]
+    with tempfile.TemporaryDirectory(prefix="kdenlive-profile-") as backup:
+        saved = {}
+        for index, item in enumerate(items):
+            if item.is_dir():
+                saved[item] = Path(backup) / str(index)
+                shutil.copytree(item, saved[item])
+            elif item.is_file():
+                saved[item] = Path(backup) / str(index)
+                shutil.copy2(item, saved[item])
+        try:
+            yield
+        finally:
+            for item in items:
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=True)
+                elif item.exists():
+                    item.unlink()
+                if item in saved:
+                    if saved[item].is_dir():
+                        shutil.copytree(saved[item], item)
+                    else:
+                        shutil.copy2(saved[item], item)
 
 
 def main():
@@ -37,9 +73,19 @@ def main():
             environment.pop(key)
     # CI runners have no audio device: the monitor's sdl2_audio consumer would fail and Kdenlive would block
     # on a modal "Could not create the video preview window" error before starting the MCP server.
-    environment.update(QT_QPA_PLATFORM="offscreen", QT_FORCE_STDERR_LOGGING="1", SDL_AUDIODRIVER="dummy")
+    environment.update(QT_FORCE_STDERR_LOGGING="1", SDL_AUDIODRIVER="dummy")
+    startup = None
+    if os.name == "nt":
+        # The offscreen QPA plugin crashes or hangs Kdenlive's Qt Quick splash/monitors on Windows (no
+        # fonts, no scene graph backend). Hosted Windows runners have an interactive desktop, so use the
+        # native platform with a minimized, non-activated window.
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = 7  # SW_SHOWMINNOACTIVE
+    else:
+        environment["QT_QPA_PLATFORM"] = "offscreen"
 
-    with tempfile.TemporaryDirectory(prefix="kdenlive-mcp-smoke-") as profile:
+    with preserved_windows_profile(), tempfile.TemporaryDirectory(prefix="kdenlive-mcp-smoke-") as profile:
         # First-run configuration and caches must not affect the runner's profile.
         environment.update(APPDATA=profile, LOCALAPPDATA=profile, XDG_CONFIG_HOME=profile,
                            XDG_CACHE_HOME=profile, XDG_DATA_HOME=profile)
@@ -48,6 +94,7 @@ def main():
                 [str(executable), "--no-welcome"], cwd=executable.parent, env=environment,
                 stdout=log, stderr=subprocess.STDOUT,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                startupinfo=startup,
             )
             try:
                 deadline = time.monotonic() + 120
