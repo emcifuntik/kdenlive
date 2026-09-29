@@ -104,6 +104,9 @@ if ($Stage -eq 'Setup') {
 . (Join-Path $craftRoot 'craft/craftenv.ps1')
 Set-Location -LiteralPath $repoRoot
 $common = @('--ci-mode', '--options', '[CodeSigning]Enabled=False', '--options', '[Compile]Jobs=4')
+# KDE's msvc2022 binary cache (CacheVersion 26.05) carries KDE Gear only up to 26.04.x for these runtime
+# dependencies of Kdenlive; pin them to the cached release instead of building 26.08 from source.
+$common += @('--options', 'kde/kdenetwork/kio-extras.version=26.04.2', '--options', 'kde/applications/libkexiv2.version=26.04.2')
 $application = @('--options', 'kdenlive.version=master', '--options', "kdenlive.srcDir=$repoRoot",
     '--options', 'kdenlive.buildTests=False', '--options', 'kdenlive.packageAppx=False')
 
