@@ -30,6 +30,24 @@ $logDir = Join-Path $repoRoot 'build-release'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $stageLog = Join-Path $logDir "$($Stage.ToLowerInvariant()).log"
 
+function Write-CacheDiagnostics {
+    param([string]$Level = 'warning')
+    # Job logs are only visible to signed-in users, check-run annotations are public. Surface why Craft
+    # did (not) restore packages from the KDE binary cache: a miss turns the bootstrap into a from-source
+    # build of its whole toolchain.
+    if (-not (Test-Path -LiteralPath $stageLog)) { return }
+    $pattern = 'from cache|Could not find|missmatch|not compatible|Cached config|Local config|Failed to fetch|Fetch Json|manifest\.json'
+    $lines = @(Select-String -LiteralPath $stageLog -Pattern $pattern | ForEach-Object { $_.Line.Trim() })
+    if (-not $lines) { return }
+    $interesting = @($lines | Where-Object { $_ -notmatch 'Trying to restore' })
+    $summary = "matched $($lines.Count) cache lines; non-restore lines: $($interesting.Count)"
+    $detail = ((@($summary) + ($interesting | Select-Object -First 60) + ($lines | Select-Object -First 20)) -join "`n") `
+        -replace '\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))', ''
+    if ($detail.Length -gt 12000) { $detail = $detail.Substring(0, 12000) }
+    $detail = $detail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+    Write-Host "::$Level title=Craft binary cache ($Stage)::$detail"
+}
+
 function Invoke-Checked {
     param([string]$Command, [string[]]$Arguments)
     $tail = [Collections.Generic.Queue[string]]::new()
@@ -45,6 +63,7 @@ function Invoke-Checked {
         if ($detail.Length -gt 6000) { $detail = $detail.Substring($detail.Length - 6000) }
         $detail = $detail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
         Write-Host "::error title=Craft $Stage failed::$detail"
+        Write-CacheDiagnostics -Level warning
         throw "$Command failed with exit code $exitCode; see $stageLog"
     }
 }
@@ -56,7 +75,8 @@ if ($Stage -eq 'Setup') {
     Invoke-Checked git @('config', '--global', 'core.longpaths', 'true')
     $bootstrap = Join-Path $env:RUNNER_TEMP 'CraftBootstrap.py'
     Invoke-WebRequest "https://raw.githubusercontent.com/KDE/craft/$env:CRAFT_REVISION/setup/CraftBootstrap.py" -OutFile $bootstrap
-    Invoke-Checked python @($bootstrap, '--prefix', $craftRoot, '--branch', $env:CRAFT_REVISION, '--use-defaults')
+    Invoke-Checked python @($bootstrap, '--prefix', $craftRoot, '--branch', $env:CRAFT_REVISION, '--use-defaults', '--verbose')
+    Write-CacheDiagnostics -Level notice
 
     # Bootstrap installs Craft and its blueprint repository. Pin both before building.
     $repositories = @{

@@ -70,13 +70,21 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+      - name: Collect Craft logs
+        if: failure()
+        # upload-artifact only accepts files below the workspace; Craft logs live in C:\CraftRoot.
+        run: |
+          if (Test-Path C:/CraftRoot/logs) {
+            New-Item -ItemType Directory -Force build-release/craft-logs | Out-Null
+            Copy-Item -Recurse -Force C:/CraftRoot/logs/* build-release/craft-logs
+          }
       - name: Upload build diagnostics
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: windows-build-diagnostics
           path: |
-            C:/CraftRoot/logs/**
+            build-release/craft-logs/**
             build-mcp-windows/Testing/Temporary/**
             build-release/*.log
           if-no-files-found: ignore
