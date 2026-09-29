@@ -122,7 +122,7 @@ void McpTools::startRenderStep(const QString &id)
     connect(process, &QProcess::started, this, [this, id]() { m_renderJobs[id].state.insert("state", "running"); });
     connect(process, &QProcess::readyReadStandardOutput, this, [this, id, process]() {
         auto &state = m_renderJobs[id].state;
-        state.insert("log", (state["log"].toString() + QString::fromUtf8(process->readAllStandardOutput())).right(32768));
+        state.insert("log", QString(state["log"].toString() + QString::fromUtf8(process->readAllStandardOutput())).right(32768));
     });
     connect(process, &QProcess::errorOccurred, this, [this, id, process](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
